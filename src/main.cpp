@@ -4,10 +4,10 @@
 #include <cstdio>
 #include <string>
 
-#define LOG_TAG "TNTTimer"
+#define LOG_TAG "TNTTimerDebug"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-// Basic structure of a TNT entity in Bedrock
 class Actor {
 public:
     virtual ~Actor();
@@ -18,19 +18,18 @@ public:
 
 class PrimedTnt : public Actor {
 public:
-    int mFuse; // Ticks remaining until explosion (20 ticks = 1 second)
+    int mFuse;
 };
 
-// Original tick function pointer
 void (*orig_PrimedTnt_normalTick)(PrimedTnt* self) = nullptr;
 
-// Our custom function that runs every single tick for active TNT
 void hook_PrimedTnt_normalTick(PrimedTnt* self) {
     if (self) {
-        // Calculate remaining seconds
+        // Log every tick execution to confirm the hook is active
+        LOGI("[DEBUG] PrimedTnt::normalTick called! Fuse remaining: %d ticks", self->mFuse);
+
         float remainingSeconds = (float)self->mFuse / 20.0f;
 
-        // Format the text (Yellow if over 1 sec, Red if under 1 sec)
         char timerText[32];
         if (remainingSeconds > 1.0f) {
             snprintf(timerText, sizeof(timerText), "§e%.2fs", remainingSeconds);
@@ -38,18 +37,35 @@ void hook_PrimedTnt_normalTick(PrimedTnt* self) {
             snprintf(timerText, sizeof(timerText), "§c%.2fs", remainingSeconds);
         }
 
-        // Show the formatted timer above the TNT block
         self->setNameTag(timerText);
         self->setNameTagVisible(true);
+    } else {
+        LOGE("[DEBUG] PrimedTnt instance pointer is null!");
     }
 
-    // Call the original Minecraft tick logic
     if (orig_PrimedTnt_normalTick) {
         orig_PrimedTnt_normalTick(self);
     }
 }
 
-// Runs automatically as soon as LeviLauncher loads your plugin
+// Runs when LeviLauncher loads the .so library into memory
 void __attribute__((constructor)) init_plugin() {
-    LOGI("TNT Timer Plugin Loaded!");
+    LOGI("=====================================");
+    LOGI("[DEBUG] TNT Timer Plugin constructor triggered!");
+
+    void* mc_lib = dlopen("libminecraftpe.so", RTLD_LAZY);
+    if (!mc_lib) {
+        LOGE("[DEBUG] Failed to load libminecraftpe.so: %s", dlerror());
+        return;
+    }
+    LOGI("[DEBUG] Successfully acquired handle to libminecraftpe.so");
+
+    // Attempting symbol resolution
+    void* tntTickSym = dlsym(mc_lib, "_ZN9PrimedTnt10normalTickEv");
+    if (tntTickSym) {
+        LOGI("[DEBUG] Found symbol _ZN9PrimedTnt10normalTickEv at address: %p", tntTickSym);
+    } else {
+        LOGE("[DEBUG] Symbol _ZN9PrimedTnt10normalTickEv NOT found! Offset hooking may be required.");
+    }
+    LOGI("=====================================");
 }
