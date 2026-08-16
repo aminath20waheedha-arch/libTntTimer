@@ -1,4 +1,4 @@
-name: Decompile .so and Export Zip
+name: Decompile .so and Save to Repo
 
 on:
   push:
@@ -6,35 +6,49 @@ on:
       - '**.so'
   workflow_dispatch:
 
+permissions:
+  contents: write # Grants permission to commit files back to the repository
+
 jobs:
-  decompile-and-zip:
+  decompile-and-commit:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
     - name: Install Analysis Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y binutils unzip zip
+        sudo apt-get install -y binutils
 
     - name: Process and Decompile .so Files
       run: |
-        mkdir -p decompiled_output
+        mkdir -p decompiled/
         
         for file in *.so; do
           if [ -f "$file" ]; then
             echo "Processing $file..."
             
             # Extract printable strings
-            strings "$file" > "decompiled_output/${file}_strings.txt"
+            strings "$file" > "decompiled/${file}_strings.txt"
             
-            # Dump dynamic dynamic symbols
-            readelf -sW "$file" > "decompiled_output/${file}_symbols.txt" || true
+            # Dump dynamic symbols
+            readelf -sW "$file" > "decompiled/${file}_symbols.txt" || true
             
             # Extract header and section layout
-            readelf -hW "$file" > "decompiled_output/${file}_headers.txt" || true
+            readelf -hW "$file" > "decompiled/${file}_headers.txt" || true
+            
+            # Disassemble executable sections into assembly code
+            objdump -d "$file" > "decompiled/${file}_disassembly.asm" || true
+          fi
+        done
+
+    - name: Commit Decompiled Files back to Repository
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: "chore: automatically add decompiled output files"
+        branch: ${{ github.ref_name }}            readelf -hW "$file" > "decompiled_output/${file}_headers.txt" || true
             
             # Disassemble executable sections into assembly code
             objdump -d "$file" > "decompiled_output/${file}_disassembly.asm" || true
