@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # Grants permission to commit files back to the repository
+  contents: write
 
 jobs:
   decompile-and-commit:
@@ -24,44 +24,22 @@ jobs:
 
     - name: Process and Decompile .so Files
       run: |
-        mkdir -p decompiled/
+        mkdir -p decompiled
         
         for file in *.so; do
           if [ -f "$file" ]; then
             echo "Processing $file..."
-            
-            # Extract printable strings
             strings "$file" > "decompiled/${file}_strings.txt"
-            
-            # Dump dynamic symbols
             readelf -sW "$file" > "decompiled/${file}_symbols.txt" || true
-            
-            # Extract header and section layout
             readelf -hW "$file" > "decompiled/${file}_headers.txt" || true
-            
-            # Disassemble executable sections into assembly code
             objdump -d "$file" > "decompiled/${file}_disassembly.asm" || true
           fi
         done
 
-    - name: Commit Decompiled Files back to Repository
-      uses: stefanzweifel/git-auto-commit-action@v5
-      with:
-        commit_message: "chore: automatically add decompiled output files"
-        branch: ${{ github.ref_name }}            readelf -hW "$file" > "decompiled_output/${file}_headers.txt" || true
-            
-            # Disassemble executable sections into assembly code
-            objdump -d "$file" > "decompiled_output/${file}_disassembly.asm" || true
-          fi
-        done
-
-    - name: Create Zip Archive
+    - name: Commit and Push Changes
       run: |
-        cd decompiled_output
-        zip -r ../decompiled_results.zip .
-
-    - name: Upload Zip as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Decompiled-SO-Package
-        path: decompiled_results.zip
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add decompiled/
+        git commit -m "chore: add decompiled text files" || exit 0
+        git push
